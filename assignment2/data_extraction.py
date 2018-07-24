@@ -14,103 +14,46 @@ brain_data = brain_load.get_fdata()
 k = np.ones((3,3,3), dtype=int)
 k[1,1,1] = 0
 
-lesion_neighbors = ndimage.convolve(lesion_data, k, mode='constant', cval=0.0)
+# X, Y, Z coordinates of lesions are filled
+output_df = pd.DataFrame(np.argwhere(lesion_data > 0.), columns=['x', 'y', 'z'])
 
-out_dict = {'x': [], 'y': [], 'z': [], 'brain_image': [], 'lesion_mask': []}
+# sum of the lesion neighbors
+num_of_nei_lesions = ndimage.convolve(lesion_data, k, mode='constant', cval=0.0)
+num_of_nei_lesions = num_of_nei_lesions * lesion_data
 
-sum_of_neighbor_voxels_for_brain = 0
-sum_of_neighbor_voxels_for_lesion = 0
-number_of_neighbor_voxels = 0
+# NUMBER_OF_NEIGHBOR_LESIONS are filled
+output_df['num_of_neighbor_lesions'] = pd.Series(num_of_nei_lesions[num_of_nei_lesions > 0.])
 
-def calculate(x, y, z):
-    global sum_of_neighbor_voxels_for_brain, sum_of_neighbor_voxels_for_lesion, number_of_neighbor_voxels, brain_data, lesion_neighbors
-    
-    sum_of_neighbor_voxels_for_brain += brain_data[x, y, z]
-    sum_of_neighbor_voxels_for_lesion += lesion_neighbors[x, y, z]
-    number_of_neighbor_voxels += 1
+# calculating the average of number of neighbor lesions
+avg_of_num_of_nei_lesions = ndimage.convolve(num_of_nei_lesions, k, mode='constant', cval=0.0)
+avg_of_num_of_nei_lesions = avg_of_num_of_nei_lesions * lesion_data
 
-for x in range(512):
-    for y in range(512):
-        for z in range(512):
-            if lesion_data[x, y, z]:
-                
-                out_dict['x'].append(x)
-                out_dict['y'].append(y)
-                out_dict['z'].append(z)
-                
-                sum_of_neighbor_voxels_for_brain = 0
-                sum_of_neighbor_voxels_for_lesion = 0
-                number_of_neighbor_voxels = 0
-                
-                # y-1 slice
-                if lesion_data[x-1, y-1, z+1]: calculate(x-1, y-1, z+1)
+# AVERAGE OF NUMBER OF NEIGHBOR LESIONS are filled
+output_df['avg_of_num_of_neighbor_lesions'] = pd.Series(avg_of_num_of_nei_lesions[avg_of_num_of_nei_lesions > 0.] / num_of_nei_lesions[num_of_nei_lesions > 0.])
 
-                if lesion_data[x, y-1, z+1]: calculate(x, y-1, z+1)
+# DIFFERENCE OF NUMBER OF NEIGHBOR LESIONS AND AVERAGE OF NUMBER OF NEIGHBOR LESIONS
+# num_of_neighbor_lesions - avg_of_num_of_neighbor_lesions
+output_df['diff_of_num_of_neighbor_lesions_and_avg_of_num_of_neighbor_lesions'] = output_df['num_of_neighbor_lesions'].subtract(output_df['avg_of_num_of_neighbor_lesions'])
 
-                if lesion_data[x+1, y-1, z+1]: calculate(x+1, y-1, z+1)
-                    
-                if lesion_data[x-1, y-1, z]: calculate(x-1, y-1, z)
 
-                if lesion_data[x, y-1, z]: calculate(x, y-1, z)
+# multiplying by lesion_data to get only lesion intensities
+brain_data = brain_data * lesion_data
 
-                if lesion_data[x+1, y-1, z]: calculate(x+1, y-1, z)
-                    
-                if lesion_data[x-1, y-1, z-1]: calculate(x-1, y-1, z-1)
+# VOXEL INTENSITY is filled
+output_df['voxel_intensity'] = pd.Series(brain_data[brain_data > 0.])
 
-                if lesion_data[x, y-1, z-1]: calculate(x, y-1, z-1)
+# convolve brain_data to get the sum of the intensities of neighbor voxels
+brain_data = ndimage.convolve(brain_data, k, mode='constant', cval=0.0)
 
-                if lesion_data[x+1, y-1, z-1]: calculate(x+1, y-1, z-1)
-                    
-                # y slice
-                if lesion_data[x-1, y, z+1]: calculate(x-1, y, z+1)
+# multiplying by lesion_data to get only the sum of lesion intensities
+brain_data = brain_data * lesion_data
 
-                if lesion_data[x, y, z+1]: calculate(x, y, z+1)
+# AVERAGE INTENSITY OF NEIGHBOR VOXELS
+output_df['average_intensity_of_neighbor_voxels'] = pd.Series(brain_data[brain_data > 0.] / num_of_nei_lesions[num_of_nei_lesions > 0.])
 
-                if lesion_data[x+1, y, z+1]: calculate(x+1, y, z+1)
-                    
-                if lesion_data[x-1, y, z]: calculate(x-1, y, z)
+# DIFFERENCE OF VOXEL INTENSITY AND AVERAGE INTENSITY OF NEIGHBOR VOXELS
+# voxel_intensity - average_intensity_of_neighbor_voxels
+output_df['diff_of_vox_int_and_avg_int_of_nei_vox'] = output_df['voxel_intensity'].subtract(output_df['average_intensity_of_neighbor_voxels'])
 
-                # lesion_data[x, y, z] excluding the central voxel
-                
-                if lesion_data[x+1, y, z]: calculate(x+1, y, z)
-                    
-                if lesion_data[x-1, y, z-1]: calculate(x-1, y, z-1)
-                
-                if lesion_data[x, y, z-1]: calculate(x, y, z-1)
-                
-                if lesion_data[x+1, y, z-1]: calculate(x+1, y, z-1)
-                
-                # y+1 slice
-                if lesion_data[x-1, y+1, z+1]: calculate(x-1, y+1, z+1)
-                
-                if lesion_data[x, y+1, z+1]: calculate(x, y+1, z+1)
-                
-                if lesion_data[x+1, y+1, z+1]: calculate(x+1, y+1, z+1)
-                    
-                if lesion_data[x-1, y+1, z]: calculate(x-1, y+1, z)
-                
-                if lesion_data[x, y+1, z]: calculate(x, y+1, z)
-                
-                if lesion_data[x+1, y+1, z]: calculate(x+1, y+1, z)
-                    
-                if lesion_data[x-1, y+1, z-1]: calculate(x-1, y+1, z-1)
-                
-                if lesion_data[x, y+1, z-1]: calculate(x, y+1, z-1)
-                
-                if lesion_data[x+1, y+1, z-1]: calculate(x+1, y+1, z-1)
-                
-                intensity_of_voxel_of_brain = brain_data[x, y, z]
-                average_for_brain = sum_of_neighbor_voxels_for_brain / number_of_neighbor_voxels
-                difference_for_brain = intensity_of_voxel_of_brain - average_for_brain
-                
-                number_of_lesion_neighbors = lesion_neighbors[x, y, z]
-                average_for_lesion = sum_of_neighbor_voxels_for_lesion / number_of_neighbor_voxels
-                difference_for_lesion = number_of_lesion_neighbors - average_for_lesion
-                
-                out_dict['brain_image'].append([intensity_of_voxel_of_brain, average_for_brain, difference_for_brain])
-                out_dict['lesion_mask'].append([number_of_lesion_neighbors, average_for_lesion, difference_for_lesion])
-
-df = pd.DataFrame(data=out_dict)
-writer = pd.ExcelWriter('./output/output.xlsx')
-df.to_excel(writer,'Sheet1')
-writer.save()
+# saving to the file
+output_df.to_csv('output/output.csv')
