@@ -42,7 +42,7 @@ def find_components(file):
         x = int(row[1]['x'])
         y = int(row[1]['y'])
         z = int(row[1]['z'])
-        voxel_id = int(row[1]['Unnamed: 0'])
+        voxel_id = int(row[1]['voxel_id'])
         img[x, y, z] = 1
         coords_to_ids[(x, y, z)] = voxel_id
     
